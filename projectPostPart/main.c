@@ -61,6 +61,7 @@
 
 // Standard include
 #include <stdio.h>
+//#include "string.h"
 
 // Driverlib includes
 #include "hw_types.h"
@@ -79,6 +80,12 @@
 // Common interface includes
 #include "gpio_if.h"
 
+// Simplelink includes
+//#include "simplelink.h"
+#include "uart.h"
+#include "common.h"
+#include "uart_if.h"
+
 #include "timer_if.h"
 #include "timer.h"
 #include "interrupt.h"
@@ -92,12 +99,79 @@
 //*****************************************************************************
 //                      MACRO DEFINITIONS
 //*****************************************************************************
-#define APPLICATION_VERSION        "1.1.1"
+//#define APPLICATION_VERSION        "1.1.1"
 #define FOREVER                    1
+#define MAX_URI_SIZE 128
+#define URI_SIZE MAX_URI_SIZE + 1
+
+
+#define APPLICATION_NAME        "SSL"
+#define APPLICATION_VERSION     "1.1.1.EEC.Spring2018"
+#define SERVER_NAME             "a1r5zeocu68fac-ats.iot.us-west-2.amazonaws.com"
+#define GOOGLE_DST_PORT         8443
+
+#define SL_SSL_CA_CERT "/cert/rootCA.der" //starfield class2 rootca (from firefox) // <-- this one works
+#define SL_SSL_PRIVATE "/cert/private.der"
+#define SL_SSL_CLIENT  "/cert/client.der"
+
+
+//NEED TO UPDATE THIS FOR IT TO WORK!
+#define DATE                14    /* Current Date */
+#define MONTH               16     /* Month 1-12 */
+#define YEAR                2019  /* Current year */
+#define HOUR                01    /* Time - hours */
+#define MINUTE              31    /* Time - minutes */
+#define SECOND              0     /* Time - seconds */
+
+#define POSTHEADER "POST /things/EEC172_P5/shadow HTTP/1.1\n\r"
+#define HOSTHEADER "Host: a1r5zeocu68fac-ats.iot.us-west-2.amazonaws.com\r\n"
+#define CHEADER "Connection: Keep-Alive\r\n"
+#define CTHEADER "Content-Type: application/json; charset=utf-8\r\n"
+#define CLHEADER1 "Content-Length: "
+#define CLHEADER2 "\r\n\r\n"
+
+#define DATA1 "{\"state\": {\r\n\"desired\" : {\r\n\"var\" : \""
+#define DATA2 "\"\r\n}}}\r\n\r\n"
+
+// Application specific status/error codes
+typedef enum{
+    // Choosing -0x7D0 to avoid overlap w/ host-driver's error codes
+    LAN_CONNECTION_FAILED = -0x7D0,
+    INTERNET_CONNECTION_FAILED = LAN_CONNECTION_FAILED - 1,
+    DEVICE_NOT_IN_STATION_MODE = INTERNET_CONNECTION_FAILED - 1,
+
+    STATUS_CODE_MAX = -0xBB8
+}e_AppStatusCodes;
+
+typedef struct
+{
+   /* time */
+   unsigned long tm_sec;
+   unsigned long tm_min;
+   unsigned long tm_hour;
+   /* date */
+   unsigned long tm_day;
+   unsigned long tm_mon;
+   unsigned long tm_year;
+   unsigned long tm_week_day; //not required
+   unsigned long tm_year_day; //not required
+   unsigned long reserved[3];
+}SlDateTime;
 
 //*****************************************************************************
 //                      Global Variables for Vector Table
 //*****************************************************************************
+volatile unsigned long  g_ulStatus = 0;//SimpleLink Status
+unsigned long  g_ulPingPacketsRecv = 0; //Number of Ping Packets received
+unsigned long  g_ulGatewayIP = 0; //Network Gateway IP address
+unsigned char  g_ucConnectionSSID[SSID_LEN_MAX+1]; //Connection SSID
+unsigned char  g_ucConnectionBSSID[BSSID_LEN_MAX]; //Connection BSSID
+signed char    *g_Host = SERVER_NAME;
+
+int id = 0;
+char *message;
+SlDateTime g_time;
+
 #if defined(ccs)
 extern void (* const g_pfnVectors[])(void);
 #endif
