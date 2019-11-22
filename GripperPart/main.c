@@ -105,6 +105,29 @@ extern void (* const g_pfnVectors[])(void);
 extern uVectorEntry __vector_table;
 #endif
 
+//*****************************************************************************
+//
+// Globals used by the timer interrupt handler.
+//
+//*****************************************************************************
+static volatile unsigned long g_ulSysTickValue;
+static volatile unsigned long g_ulRefTimerInts = 0;
+static volatile unsigned long g_ulIntClearVector;
+unsigned long g_ulTimerInts;
+int counterHRZT = 0;
+int servoLimitHRZT = 70;
+int counterVTC = 0;
+int servoLimitVTC = 40;
+int counterGRIP = 0;
+int servoLimitGRIP = 100;
+int UpDown = 2; //up 1->+2 && down 0->-2 && 2 do nothing
+int LeftRight = 2; //left 1->+2 && right 0->-2 && 2 do nothing
+int Grip = 2;
+int x;
+int y;
+int SW2;
+int SW3;
+
 
 //*****************************************************************************
 //
@@ -115,7 +138,163 @@ extern uVectorEntry __vector_table;
 //! \return none
 //
 //*****************************************************************************
+static void
+TimerA0IntHandler(void)
+{
+    Timer_IF_InterruptClear(TIMERA0_BASE);
 
+    x = MAP_ADCFIFORead(ADC_BASE, ADC_CH_2);
+    y = MAP_ADCFIFORead(ADC_BASE, ADC_CH_1);
+    x = (x >> 2) & 0x0FFF;
+    y = (y >> 2) & 0x0FFF;
+    printf("x = %d    y = %d\r\n", x, y);
+    if(x < 200){
+        if(y < 200){
+            //printf("Up -> Left\r\n");
+            UpDown = 1;
+            LeftRight = 1;
+        }
+        else{
+            LeftRight = 1;//printf("Left\r\n");
+            UpDown = 2;
+        }
+    }
+    else if(y < 1700 && y > 1400){
+        //printf("Up -> Right\r\n");
+        UpDown = 1;
+        LeftRight = 0;
+    }
+    else if(x < 2350 && x > 2200){
+        if(y < 2350 && y > 2200){
+            //printf("Down -> Right\r\n");
+            UpDown = 0;
+            LeftRight = 0;
+        }
+        else{
+            LeftRight = 0;//printf("Right\r\n");
+            UpDown = 2;
+        }
+    }
+    else if(x < 1000 && x > 300){
+        //printf("Down -> Left\r\n");
+        UpDown = 0;
+        LeftRight = 1;
+    }
+    else if(y < 200){
+        UpDown = 1;//printf("Up\r\n");
+        LeftRight = 2;
+    }
+    else if(y < 2300 && y > 2200){
+        UpDown = 0;//printf("Down\r\n");
+        LeftRight = 2;
+    }
+    else{
+        UpDown = 2;
+        LeftRight = 2;
+    }
+
+    SW2 =  MAP_GPIOPinRead(GPIOA2_BASE, 0x40);
+    SW3 =  MAP_GPIOPinRead(GPIOA1_BASE, 0x20);
+    if(SW2 != 0 && SW3 != 0){
+        Grip = 2;
+    }
+    else if(SW2 != 0){
+        Grip = 1;
+    }
+    else if(SW3 != 0){
+        Grip = 0;
+    }
+    else{
+        Grip = 2;
+    }
+}
+
+static void
+TimerA1IntHandler(void)
+{
+    //
+    // Clear the timer interrupt.
+    //
+    Timer_IF_InterruptClear(TIMERA1_BASE);
+    MAP_TimerDisable(TIMERA1_BASE, TIMER_BOTH);
+    if(counterHRZT < servoLimitHRZT){
+        GPIO_IF_LedOn(MCU_GREEN_LED_GPIO);
+    }
+    else{
+        GPIO_IF_LedOff(MCU_GREEN_LED_GPIO);
+    }
+    counterHRZT++;
+    if(counterHRZT == 999)
+        counterHRZT = 0;
+
+    if(counterVTC < servoLimitVTC){
+        GPIO_IF_LedOn(MCU_ORANGE_LED_GPIO);
+    }
+    else{
+        GPIO_IF_LedOff(MCU_ORANGE_LED_GPIO);
+    }
+    counterVTC++;
+    if(counterVTC == 999)
+        counterVTC = 0;
+
+    if(counterGRIP < servoLimitGRIP){
+        GPIO_IF_LedOn(MCU_RED_LED_GPIO);
+    }
+    else{
+        GPIO_IF_LedOff(MCU_RED_LED_GPIO);
+    }
+    counterGRIP++;
+    if(counterGRIP == 999)
+        counterGRIP = 0;
+
+
+    MAP_TimerIntEnable(TIMERA1_BASE, TIMER_BOTH);
+    MAP_TimerEnable(TIMERA1_BASE, TIMER_BOTH);
+}
+
+void
+ADCSetUp(void)
+{
+    //
+    // Enable ADC and channel
+    //
+    MAP_ADCEnable(ADC_BASE);
+    MAP_ADCChannelEnable(ADC_BASE, ADC_CH_2);
+    MAP_ADCChannelEnable(ADC_BASE, ADC_CH_1);
+}
+
+void
+LEDSetUp(void)
+{
+    //
+    // configure the LED RED and GREEN and ORANGE
+    //
+    GPIO_IF_LedConfigure(LED1|LED2|LED3);
+
+    GPIO_IF_LedOff(MCU_ALL_LED_IND);
+}
+
+void
+TimerIntSetUp(void)
+{
+    unsigned long ulStatus;
+
+    // Init Timer A0
+    PRCMPeripheralClkEnable(PRCM_TIMERA0, PRCM_RUN_MODE_CLK);
+    PRCMPeripheralReset(PRCM_TIMERA0);
+    TimerIntRegister(TIMERA0_BASE, TIMER_A, TimerA0IntHandler);
+    TimerConfigure(TIMERA0_BASE, TIMER_CFG_PERIODIC);
+    TimerLoadSet(TIMERA0_BASE, TIMER_A, 80000000);
+    ulStatus = TimerIntStatus(TIMERA0_BASE, false);
+    TimerIntClear(TIMERA0_BASE, ulStatus);
+
+    // Init Timer A1
+    Timer_IF_Init(PRCM_TIMERA1, TIMERA1_BASE, TIMER_CFG_A_PERIODIC | TIMER_CFG_B_PERIODIC, TIMER_BOTH, 0);
+    MAP_TimerLoadSet(TIMERA1_BASE, TIMER_BOTH, 1140);
+    MAP_TimerIntRegister(TIMERA1_BASE, TIMER_BOTH, TimerA1IntHandler);
+    ulStatus = TimerIntStatus(TIMERA1_BASE, false);
+    TimerIntClear(TIMERA1_BASE, ulStatus);
+}
 
 //*****************************************************************************
 //
@@ -170,12 +349,37 @@ main(void)
     // Pinmuxing for LEDs
     //
     PinMuxConfig();
+    LEDSetUp();
+    TimerIntSetUp();
+    ADCSetUp();
+
+    MAP_TimerIntEnable(TIMERA0_BASE, TIMER_A);
+    MAP_TimerEnable(TIMERA0_BASE, TIMER_TIMA_TIMEOUT);
+
+    MAP_TimerIntEnable(TIMERA1_BASE, TIMER_BOTH);
+    MAP_TimerEnable(TIMERA1_BASE, TIMER_BOTH);
 
     //
     // Loop forever while the timers run.
     //
     while(FOREVER)
     {
+        if(LeftRight == 1 && servoLimitHRZT <= 110)
+            servoLimitHRZT += 2;
+        else if(LeftRight == 0 && servoLimitHRZT >= 30)
+            servoLimitHRZT -= 2;
+
+        if(UpDown == 1 && servoLimitVTC <= 110)
+            servoLimitVTC += 2;
+        else if(UpDown == 0 && servoLimitVTC >= 30)
+            servoLimitVTC -= 2;
+
+        if(Grip == 1 && servoLimitGRIP <= 95)
+            servoLimitGRIP += 5;
+        else if(Grip == 0 && servoLimitGRIP >= 30)
+            servoLimitGRIP -= 5;
+
+        MAP_UtilsDelay(800000);
     }
 }
 
