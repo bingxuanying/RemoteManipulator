@@ -364,20 +364,20 @@ main(void)
     //
     while(FOREVER)
     {
-        if(LeftRight == 1 && servoLimitHRZT <= 100)
-            servoLimitHRZT += 1;
+        if(LeftRight == 1 && servoLimitHRZT <= 110)
+            servoLimitHRZT += 2;
         else if(LeftRight == 0 && servoLimitHRZT >= 30)
-            servoLimitHRZT -= 1;
+            servoLimitHRZT -= 2;
 
-        if(UpDown == 1 && servoLimitVTC <= 100)
-            servoLimitVTC += 1;
+        if(UpDown == 1 && servoLimitVTC <= 110)
+            servoLimitVTC += 2;
         else if(UpDown == 0 && servoLimitVTC >= 30)
-            servoLimitVTC -= 1;
+            servoLimitVTC -= 2;
 
-        if(Grip == 1 && servoLimitGRIP <= 90)
-            servoLimitGRIP += 4;
+        if(Grip == 1 && servoLimitGRIP <= 95)
+            servoLimitGRIP += 5;
         else if(Grip == 0 && servoLimitGRIP >= 30)
-            servoLimitGRIP -= 4;
+            servoLimitGRIP -= 5;
 
         MAP_UtilsDelay(800000);
     }
