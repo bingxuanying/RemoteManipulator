@@ -459,6 +459,73 @@ main(void)
 
 //*****************************************************************************
 //
+// POST
+//
+//*****************************************************************************
+
+static int http_post(int iTLSSockID){
+    char acSendBuff[512];
+    char acRecvbuff[1460];
+    char cCLLength[200];
+    char* pcBufHeaders;
+    int lRetVal = 0;
+
+    pcBufHeaders = acSendBuff;
+    strcpy(pcBufHeaders, POSTHEADER);
+    pcBufHeaders += strlen(POSTHEADER);
+    strcpy(pcBufHeaders, HOSTHEADER);
+    pcBufHeaders += strlen(HOSTHEADER);
+    strcpy(pcBufHeaders, CHEADER);
+    pcBufHeaders += strlen(CHEADER);
+    strcpy(pcBufHeaders, "\r\n\r\n");
+
+    int dataLength = strlen(message);
+
+    strcpy(pcBufHeaders, CTHEADER);
+    pcBufHeaders += strlen(CTHEADER);
+    strcpy(pcBufHeaders, CLHEADER1);
+
+    pcBufHeaders += strlen(CLHEADER1);
+    sprintf(cCLLength, "%d", dataLength);
+
+    strcpy(pcBufHeaders, cCLLength);
+    pcBufHeaders += strlen(cCLLength);
+    strcpy(pcBufHeaders, CLHEADER2);
+    pcBufHeaders += strlen(CLHEADER2);
+
+    strcpy(pcBufHeaders, message);
+    pcBufHeaders += strlen(message);
+
+    int testDataLength = strlen(pcBufHeaders);
+
+    UART_PRINT(acSendBuff);
+
+    UART_PRINT("cc \n\r a \n\r");
+
+    //
+    // Send the packet to the server */
+    //
+    lRetVal = sl_Send(iTLSSockID, acSendBuff, strlen(acSendBuff), 0);
+    if(lRetVal < 0) {
+        //UART_PRINT("POST failed. Error Number: %i\n\r",lRetVal);
+        sl_Close(iTLSSockID);
+        return lRetVal;
+    }
+    lRetVal = sl_Recv(iTLSSockID, &acRecvbuff[0], sizeof(acRecvbuff), 0);
+    if(lRetVal < 0) {
+        //UART_PRINT("Received failed. Error Number: %i\n\r",lRetVal);
+        //sl_Close(iSSLSockID);
+           return lRetVal;
+    }
+    else {
+        acRecvbuff[lRetVal+1] = '\0';
+        //UART_PRINT(acRecvbuff);
+    }
+    return 0;
+}
+
+//*****************************************************************************
+//
 // Close the Doxygen group.
 //! @}
 //
